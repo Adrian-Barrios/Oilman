@@ -19,7 +19,7 @@ endif()
 
 
 
-project(mygame)
+project(Oilman)
 
 
 
