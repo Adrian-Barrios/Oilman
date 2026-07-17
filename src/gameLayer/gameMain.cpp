@@ -1,36 +1,24 @@
 #include <raylib.h>
 #include "gameMain.h"
 #include <iostream>
-
+#include "assetManager.h"
 struct GameData
 {
-	float positionX = 100;
-	float positionY = 100;
 } gameData;
+
+AssetManager assetManager;
 
 bool initGame()
 {
+	assetManager.loadAll();
 	return true;
 }
 bool updateGame()
 {
-	#pragma region movementAndDeltaTime
-	float deltaTime = GetFrameTime();
-	if (deltaTime > 1.f / 5) {deltaTime = 1 / 5.f;} // Prevents sprite from jumping around.
-	Color c;
-	c.r = 255;
-	c.g = 0;
-	c.b = 200;
-	c.a = 255;
 
-	if (IsKeyDown(KEY_DOWN)) {gameData.positionY += 200*deltaTime;}
-	if (IsKeyDown(KEY_UP))   {gameData.positionY -= 200*deltaTime;}
-	if (IsKeyDown(KEY_LEFT)) {gameData.positionX -= 200*deltaTime;}
-	if (IsKeyDown(KEY_RIGHT)){gameData.positionX += 200*deltaTime;}
-	#pragma endregion
-
-	DrawText("Oilman", 350, 50, 50, RED);
-	DrawRectangle(gameData.positionX, gameData.positionY, 40, 40, BLUE);
+	DrawTexturePro(assetManager.dirt, 
+		{0,0,(float)assetManager.dirt.width,(float)assetManager.dirt.height},
+		{50,50,100,100},{},0,WHITE); // Color affects the texture.
 
 	return true;
 }
