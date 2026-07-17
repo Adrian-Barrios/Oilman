@@ -45,7 +45,7 @@ else()
 
 endif()
 
-target_sources("${CMAKE_PROJECT_NAME}" PRIVATE ${MY_SOURCES}  "src/gameLayer/gameMain.cpp" "src/gameLayer/gameMain.h" "src/gameLayer/assetManager.cpp" "src/gameLayer/assetManager.h")
+target_sources("${CMAKE_PROJECT_NAME}" PRIVATE ${MY_SOURCES}  "src/gameLayer/gameMain.cpp" "src/gameLayer/gameMain.h" "src/gameLayer/assetManager.cpp" "src/gameLayer/assetManager.h" "src/gameLayer/blocks.h" "src/gameLayer/gameMap.cpp" "src/gameLayer/gameMap.h")
 
 
 if(MSVC) # If using the VS compiler...
