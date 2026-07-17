@@ -4,6 +4,7 @@
 #include <assetManager.h>
 #include <gameMap.h>
 #include <helpers.h>
+#include <raymath.h>
 
 struct GameData
 {
@@ -19,12 +20,12 @@ bool initGame()
 	assetManager.loadAll();
 
 	#pragma region mapCreation
-	gameData.gameMap.create(30, 10);
-	gameData.gameMap.getBlocUnsafe(0, 0).type = Block::dirt;
-	gameData.gameMap.getBlocUnsafe(1, 1).type = Block::grass;
-	gameData.gameMap.getBlocUnsafe(2, 2).type = Block::goldBlock;
-	gameData.gameMap.getBlocUnsafe(3, 3).type = Block::glass;
-	gameData.gameMap.getBlocUnsafe(4, 4).type = Block::platform;
+	gameData.gameMap.create(700, 500);
+	for(int i = 0; i < 700; i++)
+		for (int j = 0; j < 500; j++)
+		{
+			gameData.gameMap.getBlocUnsafe(i, j).type = Block::stone;
+		}
 	#pragma endregion
 
 	#pragma region camera
@@ -47,42 +48,62 @@ bool updateGame()
 
 	BeginMode2D(gameData.camera);
 
-	// Get mouse position for frame
-	Vector2 worldPos = GetScreenToWorld2D(GetMousePosition(), gameData.camera);
-	int blockX = (int)floor(worldPos.x);
-	int blockY = (int)floor(worldPos.y);
+#pragma region drawInitialBlocks
 
-	#pragma region cameraMovement
+	// Get mouse position for frame
+	Vector2 topLeftView = GetScreenToWorld2D({ 0, 0 }, gameData.camera);
+	Vector2 bottomRightView = GetScreenToWorld2D({ (float)GetScreenWidth(), (float)GetScreenHeight() }, gameData.camera);
+
+
+	int startXView = (int)floorf(topLeftView.x - 1);
+	int endXView = (int)ceilf(bottomRightView.x + 1);
+	int startYView = (int)floorf(topLeftView.y - 1);
+	int endYView = (int)ceilf(bottomRightView.y + 1);
+
+	startXView = Clamp(startXView, 0, gameData.gameMap.w - 1);
+	endXView = Clamp(endXView, 0, gameData.gameMap.w - 1);
+
+	startYView = Clamp(startYView, 0, gameData.gameMap.h - 1);
+	endYView = Clamp(endYView, 0, gameData.gameMap.h - 1);
+
+
+	for (int y = startYView; y <= endYView; y++)
+		for (int x = startXView; x <= endXView; x++)
+		{
+
+			auto& b = gameData.gameMap.getBlocUnsafe(x, y);
+
+			if (b.type != Block::air)
+			{
+
+				DrawTexturePro(
+					assetManager.textures,
+					getTextureAtlas(b.type, 0, 32, 32), //source
+					{ (float)x, (float)y, 1, 1 }, //dest
+					{ 0, 0 },// origin (top-left corner)
+					0.0f, // rotation
+					WHITE // tint
+				);
+
+			}
+
+
+		}
+
+#pragma endregion
+
+#pragma region cameraMovement
 	if (IsKeyDown(KEY_LEFT)) gameData.camera.target.x -= 7.f * deltaTime;
 	if (IsKeyDown(KEY_RIGHT)) gameData.camera.target.x +=7.f * deltaTime;
 	if (IsKeyDown(KEY_DOWN)) gameData.camera.target.y += 7.f * deltaTime;
 	if (IsKeyDown(KEY_UP)) gameData.camera.target.y -= 7.f * deltaTime;
-	#pragma endregion 
-
-	#pragma region drawInitialBlocks
-	for (int y = 0; y < gameData.gameMap.h; y++)
-		for (int x = 0; x < gameData.gameMap.w; x++)
-		{
-			auto& b = gameData.gameMap.getBlocUnsafe(x, y);
-			if (b.type != Block::air)
-			{
-
-				float size = 1;
-				float posX = x * size;
-				float posY = y * size;
-				DrawTexturePro(assetManager.textures,
-					getTextureAtlas(b.type,0,32,32),
-					{(float)x, (float)y,1,1},
-					{0,0}, // Origin, top left corner 
-					0.0f, // Rotation
-					WHITE); // tint
-			}
-		}
-
-	#pragma endregion
+#pragma endregion 
 	
 #pragma region addAndDeleteBlocks
 	
+	Vector2 worldPos = GetScreenToWorld2D(GetMousePosition(), gameData.camera);
+	int blockX = (int)floor(worldPos.x);
+	int blockY = (int)floor(worldPos.y);
 	// Draw frame
 	DrawTexturePro(
 		assetManager.frame,
@@ -112,13 +133,11 @@ bool updateGame()
 
 #pragma endregion
 
-
 	EndMode2D();
 
 	return true;
 }
 void closeGame()
-{ 
- 
-	std::cout << "Close game called. Game closed." << std::endl;
+{
+	std::cout << "Closed game" << std::endl;
 }
