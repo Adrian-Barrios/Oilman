@@ -16,6 +16,7 @@ int main()
 	ImGuiIO& io = ImGui::GetIO();
 	io.FontGlobalScale = 2;
 	io.ConfigFlags = ImGuiConfigFlags_DockingEnable; // Allows us to snap ImGui windows together
+	ImGui::StyleColorsLight();
 #pragma endregion
 
 #pragma region mainWhileLoop
