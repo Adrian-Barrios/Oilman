@@ -1,10 +1,14 @@
 #include <raylib.h>
 #include "gameMain.h"
+#include "imgui.h"
+#include <rlImGui.h>
 #include <iostream>
 #include <assetManager.h>
 #include <gameMap.h>
 #include <helpers.h>
 #include <raymath.h>
+#include <worldGenerator.h>
+#include <randomStuff.h>
 
 struct GameData
 {
@@ -20,12 +24,7 @@ bool initGame()
 	assetManager.loadAll();
 
 	#pragma region mapCreation
-	gameData.gameMap.create(700, 500);
-	for(int i = 0; i < 700; i++)
-		for (int j = 0; j < 500; j++)
-		{
-			gameData.gameMap.getBlocUnsafe(i, j).type = Block::stone;
-		}
+	generateWorld(gameData.gameMap,1234);
 	#pragma endregion
 
 	#pragma region camera
@@ -93,10 +92,11 @@ bool updateGame()
 #pragma endregion
 
 #pragma region cameraMovement
-	if (IsKeyDown(KEY_LEFT)) gameData.camera.target.x -= 7.f * deltaTime;
-	if (IsKeyDown(KEY_RIGHT)) gameData.camera.target.x +=7.f * deltaTime;
-	if (IsKeyDown(KEY_DOWN)) gameData.camera.target.y += 7.f * deltaTime;
-	if (IsKeyDown(KEY_UP)) gameData.camera.target.y -= 7.f * deltaTime;
+	static float CAMERA_SPEED = 7;
+	if (IsKeyDown(KEY_LEFT)) gameData.camera.target.x -= CAMERA_SPEED * deltaTime;
+	if (IsKeyDown(KEY_RIGHT)) gameData.camera.target.x += CAMERA_SPEED * deltaTime;
+	if (IsKeyDown(KEY_DOWN)) gameData.camera.target.y += CAMERA_SPEED * deltaTime;
+	if (IsKeyDown(KEY_UP)) gameData.camera.target.y -= CAMERA_SPEED * deltaTime;
 #pragma endregion 
 	
 #pragma region addAndDeleteBlocks
@@ -135,6 +135,12 @@ bool updateGame()
 
 	EndMode2D();
 
+	ImGui::Begin("Game control");
+	ImGui::SliderFloat("Camera speed: ", &CAMERA_SPEED, 5, 30);
+	ImGui::SliderFloat("Camera zoom: ", &gameData.camera.zoom, 30, 100);
+	ImGui::End();
+
+	DrawFPS(10, 10);
 	return true;
 }
 void closeGame()
