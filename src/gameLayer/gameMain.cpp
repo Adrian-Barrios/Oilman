@@ -43,6 +43,27 @@ bool updateGame()
 
 	gameData.camera.offset = { GetScreenWidth() / 2.0f, GetScreenHeight() / 2.0f };
 
+#pragma region cameraBounds
+	// Stop the view before the world edge so the empty space past the map never
+	// shows. The camera is centred on its target, so the target has to stay half
+	// a screen in from each side. This does not restrict a player sprite later
+	// on: once the camera clamps, the sprite just walks off centre towards the
+	// edge, which is how Terraria and most 2D platformers handle it.
+	// Recomputed every frame so it survives window resizes and the zoom slider.
+	float halfViewWidth = (GetScreenWidth() / 2.0f) / gameData.camera.zoom;
+
+	if (gameData.gameMap.w <= halfViewWidth * 2)
+	{
+		// World is narrower than the view, so centre it instead of clamping.
+		gameData.camera.target.x = gameData.gameMap.w / 2.0f;
+	}
+	else
+	{
+		gameData.camera.target.x = Clamp(gameData.camera.target.x,
+			halfViewWidth, gameData.gameMap.w - halfViewWidth);
+	}
+#pragma endregion
+
 	ClearBackground({ 75,75,150,255 });
 
 	BeginMode2D(gameData.camera);
