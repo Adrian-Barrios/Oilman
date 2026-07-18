@@ -9,18 +9,19 @@ set(CMAKE_CXX_STANDARD 17)
 #delete the out folder after changing if visual studio doesn recognize the change
 set(PRODUCTION_BUILD OFF CACHE BOOL "Make this a production build" FORCE)
 
-if(MSVC) 
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build Raylib as static libraries" FORCE)
+project(mygame)
+
+if(MSVC)
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Release>:Release>")
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 add_compile_options(/arch:AVX2) #make sure SIMD optimizations take place
 endif()
 
-set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build Raylib as static libraries" FORCE)
-project(mygame)
-
 add_subdirectory(thirdparty/raylib-5.0)
 add_subdirectory(thirdparty/imgui-docking)
 add_subdirectory(thirdparty/rlimgui)
+add_subdirectory(thirdparty/FastNoiseSIMD)
 # MY_SOURCES is defined to be a list of all the source files for my game 
 # DON'T ADD THE SOURCES BY HAND, they are already added with this macro
 file(GLOB_RECURSE MY_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
@@ -75,7 +76,7 @@ endif()
 target_include_directories("${CMAKE_PROJECT_NAME}" PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src/platform")
 target_include_directories("${CMAKE_PROJECT_NAME}" PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src/gameLayer")
 
-target_link_libraries("${CMAKE_PROJECT_NAME}" PRIVATE raylib_static imgui rlimgui)
+target_link_libraries("${CMAKE_PROJECT_NAME}" PRIVATE raylib_static imgui rlimgui fastNoiseSIMD)
 
 
 
