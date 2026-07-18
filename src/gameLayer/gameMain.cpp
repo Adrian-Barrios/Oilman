@@ -28,7 +28,7 @@ bool initGame()
 	#pragma endregion
 
 	#pragma region camera
-	gameData.camera.target = { 0,0 };
+	gameData.camera.target = { gameData.gameMap.w / 2.0f, 60.0f };
 	gameData.camera.rotation = 0.0f;
 	gameData.camera.zoom = 100.0f;
 	#pragma endregion

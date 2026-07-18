@@ -42,7 +42,7 @@ int main()
 		// Allow for docking ImGui windows without covering with a gray screen
 		ImGui::PushStyleColor(ImGuiCol_WindowBg, {});
 		ImGui::PushStyleColor(ImGuiCol_DockingEmptyBg, {}); 
-		ImGui::DockSpaceOverViewport(ImGui::GetMainViewport()); // Allows docking on main window.
+		ImGui::DockSpaceOverViewport(ImGui::GetMainViewport(), ImGuiDockNodeFlags_PassthruCentralNode); // Allows docking on main window.
 		ImGui::PopStyleColor(2);
 
 		ImGui::Begin("Test");
