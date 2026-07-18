@@ -124,9 +124,9 @@ void generateWorld(GameMap& gameMap, int seed)
 			}
 		}
 
-		if (stoneHeight < 40)
+		if (stoneHeight < 80)
 		{
-			stoneHeight = 40;
+			stoneHeight = 80;
 		}
 
 		if (stoneHeight > 120)
