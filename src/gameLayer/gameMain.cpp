@@ -15,9 +15,13 @@ struct GameData
 	GameMap gameMap;
 	Camera2D camera;
 
+	int creativeSelectedBlock = Block::dirt;
+
 } gameData;
 
 AssetManager assetManager;
+
+bool showImGui = false;
 
 bool initGame()
 {
@@ -44,17 +48,11 @@ bool updateGame()
 	gameData.camera.offset = { GetScreenWidth() / 2.0f, GetScreenHeight() / 2.0f };
 
 #pragma region cameraBounds
-	// Stop the view before the world edge so the empty space past the map never
-	// shows. The camera is centred on its target, so the target has to stay half
-	// a screen in from each side. This does not restrict a player sprite later
-	// on: once the camera clamps, the sprite just walks off centre towards the
-	// edge, which is how Terraria and most 2D platformers handle it.
-	// Recomputed every frame so it survives window resizes and the zoom slider.
+	// stoping the view before the world edge so the empty space past the map never shows
 	float halfViewWidth = (GetScreenWidth() / 2.0f) / gameData.camera.zoom;
 
 	if (gameData.gameMap.w <= halfViewWidth * 2)
 	{
-		// World is narrower than the view, so centre it instead of clamping.
 		gameData.camera.target.x = gameData.gameMap.w / 2.0f;
 	}
 	else
@@ -125,6 +123,10 @@ bool updateGame()
 	Vector2 worldPos = GetScreenToWorld2D(GetMousePosition(), gameData.camera);
 	int blockX = (int)floor(worldPos.x);
 	int blockY = (int)floor(worldPos.y);
+
+	if (gameData.creativeSelectedBlock < 0) { gameData.creativeSelectedBlock = 0; }
+	if (gameData.creativeSelectedBlock >= Block::BLOCKS_COUNT) { gameData.creativeSelectedBlock = Block::BLOCKS_COUNT - 1; } //Prevents selecting inexistent block
+
 	// Draw frame
 	DrawTexturePro(
 		assetManager.frame,
@@ -135,7 +137,10 @@ bool updateGame()
 		WHITE
 	);
 	
-	if (IsMouseButtonDown(MOUSE_BUTTON_LEFT))
+	// don't edit blocks while the cursor is over an ImGui window
+	bool mouseOverUI = ImGui::GetIO().WantCaptureMouse;
+
+	if (!mouseOverUI && IsMouseButtonDown(MOUSE_BUTTON_LEFT))
 	{
 		auto b = gameData.gameMap.getBlockSafe(blockX, blockY);
 		if (b)
@@ -143,12 +148,12 @@ bool updateGame()
 			*b = {};
 		}
 	}
-	if (IsMouseButtonDown(MOUSE_BUTTON_RIGHT))
+	if (!mouseOverUI && IsMouseButtonDown(MOUSE_BUTTON_RIGHT))
 	{
 		auto b = gameData.gameMap.getBlockSafe(blockX, blockY);
 		if (b)
 		{
-			b->type = Block::gold;
+			b->type = gameData.creativeSelectedBlock;
 		}
 	}
 
@@ -159,6 +164,8 @@ bool updateGame()
 	ImGui::Begin("Game control");
 	ImGui::SliderFloat("Camera speed: ", &CAMERA_SPEED, 5, 30);
 	ImGui::SliderFloat("Camera zoom: ", &gameData.camera.zoom, 30, 100);
+	ImGui::Separator();
+	ImGui::InputInt("Select Block", &gameData.creativeSelectedBlock);
 	ImGui::End();
 
 	DrawFPS(10, 10);
