@@ -165,7 +165,35 @@ bool updateGame()
 	ImGui::SliderFloat("Camera speed: ", &CAMERA_SPEED, 5, 30);
 	ImGui::SliderFloat("Camera zoom: ", &gameData.camera.zoom, 30, 100);
 	ImGui::Separator();
-	ImGui::InputInt("Select Block", &gameData.creativeSelectedBlock);
+	
+	for (int i = 0; i < Block::BLOCKS_COUNT; i++)
+	{
+
+		auto atlas = getTextureAtlas(i, 0, 32, 32);
+		atlas.x /= assetManager.textures.width;
+		atlas.width /= assetManager.textures.width;
+		atlas.y /= assetManager.textures.height;
+		atlas.height /= assetManager.textures.height;
+
+		ImGui::PushID(i);
+
+		ImTextureID tex = (ImTextureID)(intptr_t)assetManager.textures.id;
+		if (ImGui::ImageButton(tex,
+			{ 35,35 }, { atlas.x, atlas.y },
+			{ atlas.x + atlas.width, atlas.y + atlas.height }))
+		{
+			gameData.creativeSelectedBlock = i;
+		}
+
+		ImGui::PopID();
+
+		if (i % 10 != 0)
+		{
+			ImGui::SameLine();
+		}
+
+	}
+
 	ImGui::End();
 
 	DrawFPS(10, 10);
