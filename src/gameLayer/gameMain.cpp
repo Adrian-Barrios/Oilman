@@ -10,10 +10,17 @@
 #include <worldGenerator.h>
 #include <randomStuff.h>
 
+// player.png is 32x64, and blocks are drawn as 1x1 world units from a 32x32
+// atlas, so the player covers one block across and two blocks up
+constexpr float PLAYER_WIDTH = 1.f;
+constexpr float PLAYER_HEIGHT = 2.f;
+
 struct GameData
 {
 	GameMap gameMap;
 	Camera2D camera;
+
+	Vector2 playerPosition = {};
 
 	int creativeSelectedBlock = Block::dirt;
 
@@ -107,6 +114,25 @@ bool updateGame()
 
 
 		}
+
+#pragma endregion
+
+#pragma region drawPlayer
+
+	// no physics yet, the player just rides the camera. camera.offset is the middle
+	// of the screen, so camera.target is whatever world point ends up centered,
+	// including after the world edge clamp above
+	gameData.playerPosition = gameData.camera.target;
+
+	DrawTexturePro(
+		assetManager.player,
+		{ 0, 0, (float)assetManager.player.width, (float)assetManager.player.height }, //source
+		{ gameData.playerPosition.x, gameData.playerPosition.y,
+			PLAYER_WIDTH, PLAYER_HEIGHT }, //dest
+		{ PLAYER_WIDTH / 2.f, PLAYER_HEIGHT / 2.f }, // origin (sprite center)
+		0.0f, // rotation
+		WHITE // tint
+	);
 
 #pragma endregion
 
