@@ -9,6 +9,9 @@
 #include <raymath.h>
 #include <worldGenerator.h>
 #include <randomStuff.h>
+#include <saveMap.h>
+#include <string>
+#include <structure.h>
 
 // player.png is 32x64, and blocks are drawn as 1x1 world units from a 32x32
 // atlas, so the player covers one block across and two blocks up
@@ -24,11 +27,22 @@ struct GameData
 
 	int creativeSelectedBlock = Block::dirt;
 
+	// the two corners of the middle click drag, kept unordered; the min/max are
+	// worked out where they're used
+	Vector2 selectionStart = {};
+	Vector2 selectionEnd = {};
+
+	Structure copyStructure;
+
+	char saveName[100] = {};
+
 } gameData;
 
 AssetManager assetManager;
 
-bool showImGui = false;
+// the game runs in one of two modes, swapped with tab: playing, and level editing
+// where the ImGui windows show and the mouse copies and pastes structures
+bool levelEditingMode = false;
 
 bool initGame()
 {
@@ -51,6 +65,8 @@ bool updateGame()
 
 	float deltaTime = GetFrameTime();
 	if (deltaTime > 1.f / 5) { deltaTime = 1 / 5.f; }
+
+	if (IsKeyPressed(KEY_TAB)) { levelEditingMode = !levelEditingMode; }
 
 	gameData.camera.offset = { GetScreenWidth() / 2.0f, GetScreenHeight() / 2.0f };
 
@@ -142,6 +158,7 @@ bool updateGame()
 	if (IsKeyDown(KEY_RIGHT)) gameData.camera.target.x += CAMERA_SPEED * deltaTime;
 	if (IsKeyDown(KEY_DOWN)) gameData.camera.target.y += CAMERA_SPEED * deltaTime;
 	if (IsKeyDown(KEY_UP)) gameData.camera.target.y -= CAMERA_SPEED * deltaTime;
+
 #pragma endregion 
 	
 #pragma region addAndDeleteBlocks
@@ -153,6 +170,60 @@ bool updateGame()
 	if (gameData.creativeSelectedBlock < 0) { gameData.creativeSelectedBlock = 0; }
 	if (gameData.creativeSelectedBlock >= Block::BLOCKS_COUNT) { gameData.creativeSelectedBlock = Block::BLOCKS_COUNT - 1; } //Prevents selecting inexistent block
 
+	// don't edit the world while the cursor is over an ImGui window
+	bool mouseOverUI = ImGui::GetIO().WantCaptureMouse;
+
+	if (levelEditingMode)
+	{
+		if (!mouseOverUI)
+		{
+			// holding middle click drags out the region to copy. the press anchors one
+			// corner and the drag keeps moving the other one
+			if (IsMouseButtonPressed(MOUSE_BUTTON_MIDDLE))
+			{
+				gameData.selectionStart = Vector2{ (float)blockX, (float)blockY };
+				gameData.selectionEnd = gameData.selectionStart;
+			}
+			else if (IsMouseButtonDown(MOUSE_BUTTON_MIDDLE))
+			{
+				gameData.selectionEnd = Vector2{ (float)blockX, (float)blockY };
+			}
+
+			if (IsMouseButtonPressed(MOUSE_BUTTON_RIGHT))
+			{
+				// copyFromMap orders the corners itself
+				gameData.copyStructure.copyFromMap(gameData.gameMap,
+					gameData.selectionStart, gameData.selectionEnd);
+			}
+
+			if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
+			{
+				gameData.copyStructure.pasteIntoMap(gameData.gameMap,
+					Vector2{ (float)blockX, (float)blockY });
+			}
+		}
+	}
+	else
+	{
+		if (IsMouseButtonDown(MOUSE_BUTTON_LEFT))
+		{
+			auto b = gameData.gameMap.getBlockSafe(blockX, blockY);
+			if (b)
+			{
+				*b = {};
+			}
+		}
+
+		if (IsMouseButtonDown(MOUSE_BUTTON_RIGHT))
+		{
+			auto b = gameData.gameMap.getBlockSafe(blockX, blockY);
+			if (b)
+			{
+				b->type = gameData.creativeSelectedBlock;
+			}
+		}
+	}
+
 	// Draw frame
 	DrawTexturePro(
 		assetManager.frame,
@@ -162,65 +233,69 @@ bool updateGame()
 		0.0f,
 		WHITE
 	);
-	
-	// don't edit blocks while the cursor is over an ImGui window
-	bool mouseOverUI = ImGui::GetIO().WantCaptureMouse;
 
-	if (!mouseOverUI && IsMouseButtonDown(MOUSE_BUTTON_LEFT))
+	if (levelEditingMode)
 	{
-		auto b = gameData.gameMap.getBlockSafe(blockX, blockY);
-		if (b)
-		{
-			*b = {};
-		}
-	}
-	if (!mouseOverUI && IsMouseButtonDown(MOUSE_BUTTON_RIGHT))
-	{
-		auto b = gameData.gameMap.getBlockSafe(blockX, blockY);
-		if (b)
-		{
-			b->type = gameData.creativeSelectedBlock;
-		}
+		// the drag corners are unordered, so take the min and max to get the rectangle
+		float minX = fminf(gameData.selectionStart.x, gameData.selectionEnd.x);
+		float minY = fminf(gameData.selectionStart.y, gameData.selectionEnd.y);
+		float maxX = fmaxf(gameData.selectionStart.x, gameData.selectionEnd.x);
+		float maxY = fmaxf(gameData.selectionStart.y, gameData.selectionEnd.y);
+
+		Rectangle rect;
+		rect.x = minX;
+		rect.y = minY;
+		rect.width = maxX - minX + 1;
+		rect.height = maxY - minY + 1;
+
+		DrawRectangleLinesEx(rect, 0.1,
+			{ 20, 101, 250, 145 });
 	}
 
 #pragma endregion
 
 	EndMode2D();
 
-	ImGui::Begin("Game control");
-	ImGui::SliderFloat("Camera speed: ", &CAMERA_SPEED, 5, 30);
-	ImGui::SliderFloat("Camera zoom: ", &gameData.camera.zoom, 30, 100);
-	ImGui::Separator();
-	
-	for (int i = 0; i < Block::BLOCKS_COUNT; i++)
+	if (levelEditingMode)
 	{
+		ImGui::Begin("Game control");
+		ImGui::SliderFloat("Camera speed: ", &CAMERA_SPEED, 5, 30);
+		ImGui::SliderFloat("Camera zoom: ", &gameData.camera.zoom, 30, 100);
+		ImGui::Separator();
 
-		auto atlas = getTextureAtlas(i, 0, 32, 32);
-		atlas.x /= assetManager.textures.width;
-		atlas.width /= assetManager.textures.width;
-		atlas.y /= assetManager.textures.height;
-		atlas.height /= assetManager.textures.height;
-
-		ImGui::PushID(i);
-
-		ImTextureID tex = (ImTextureID)(intptr_t)assetManager.textures.id;
-		if (ImGui::ImageButton(tex,
-			{ 35,35 }, { atlas.x, atlas.y },
-			{ atlas.x + atlas.width, atlas.y + atlas.height }))
+		for (int i = 0; i < Block::BLOCKS_COUNT; i++)
 		{
-			gameData.creativeSelectedBlock = i;
+
+			auto atlas = getTextureAtlas(i, 0, 32, 32);
+			atlas.x /= assetManager.textures.width;
+			atlas.width /= assetManager.textures.width;
+			atlas.y /= assetManager.textures.height;
+			atlas.height /= assetManager.textures.height;
+
+			ImGui::PushID(i);
+
+			ImTextureID tex = (ImTextureID)(intptr_t)assetManager.textures.id;
+			if (ImGui::ImageButton(tex,
+				{ 35,35 }, { atlas.x, atlas.y },
+				{ atlas.x + atlas.width, atlas.y + atlas.height }))
+			{
+				gameData.creativeSelectedBlock = i;
+			}
+
+			ImGui::PopID();
+
+			if (i % 10 != 0)
+			{
+				ImGui::SameLine();
+			}
+
 		}
 
-		ImGui::PopID();
-
-		if (i % 10 != 0)
-		{
-			ImGui::SameLine();
-		}
-
+		ImGui::End();
 	}
 
-	ImGui::End();
+	DrawText(levelEditingMode ? "EDITING (tab)" : "PLAYING (tab)",
+		10, 34, 20, RAYWHITE);
 
 	DrawFPS(10, 10);
 	return true;

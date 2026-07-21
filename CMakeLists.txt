@@ -46,7 +46,7 @@ else()
 
 endif()
 
-target_sources("${CMAKE_PROJECT_NAME}" PRIVATE ${MY_SOURCES}  "src/gameLayer/gameMain.cpp" "src/gameLayer/gameMain.h" "src/gameLayer/assetManager.cpp" "src/gameLayer/assetManager.h" "src/gameLayer/blocks.h" "src/gameLayer/gameMap.cpp" "src/gameLayer/gameMap.h" "src/gameLayer/helpers.h" "src/gameLayer/helpers.cpp" "src/platform/randomStuff.h" "src/gameLayer/randomStuff.cpp" "src/gameLayer/worldGenerator.cpp" "src/gameLayer/worldGenerator.h")
+target_sources("${CMAKE_PROJECT_NAME}" PRIVATE ${MY_SOURCES}  "src/gameLayer/gameMain.cpp" "src/gameLayer/gameMain.h" "src/gameLayer/assetManager.cpp" "src/gameLayer/assetManager.h" "src/gameLayer/blocks.h" "src/gameLayer/gameMap.cpp" "src/gameLayer/gameMap.h" "src/gameLayer/helpers.h" "src/gameLayer/helpers.cpp" "src/platform/randomStuff.h" "src/gameLayer/randomStuff.cpp" "src/gameLayer/worldGenerator.cpp" "src/gameLayer/worldGenerator.h" "src/gameLayer/saveMap.cpp" "src/gameLayer/saveMap.h" "src/gameLayer/structure.h" "src/gameLayer/structure.cpp")
 
 
 if(MSVC) # If using the VS compiler...
