@@ -18,6 +18,13 @@
 constexpr float PLAYER_WIDTH = 1.f;
 constexpr float PLAYER_HEIGHT = 2.f;
 
+// what the mouse does inside level editing mode
+enum EditingSubMode
+{
+	copyPasteSubMode = 0,
+	placementSubMode,
+};
+
 struct GameData
 {
 	GameMap gameMap;
@@ -26,6 +33,7 @@ struct GameData
 	Vector2 playerPosition = {};
 
 	int creativeSelectedBlock = Block::dirt;
+	int editingSubMode = copyPasteSubMode;
 
 	// the two corners of the middle click drag, kept unordered; the min/max are
 	// worked out where they're used
@@ -173,7 +181,31 @@ bool updateGame()
 	// don't edit the world while the cursor is over an ImGui window
 	bool mouseOverUI = ImGui::GetIO().WantCaptureMouse;
 
-	if (levelEditingMode)
+	if (levelEditingMode && gameData.editingSubMode == placementSubMode)
+	{
+		if (!mouseOverUI)
+		{
+			// held rather than pressed so dragging paints a run of blocks
+			if (IsMouseButtonDown(MOUSE_BUTTON_LEFT))
+			{
+				auto b = gameData.gameMap.getBlockSafe(blockX, blockY);
+				if (b)
+				{
+					b->type = gameData.creativeSelectedBlock;
+				}
+			}
+
+			if (IsMouseButtonDown(MOUSE_BUTTON_RIGHT))
+			{
+				auto b = gameData.gameMap.getBlockSafe(blockX, blockY);
+				if (b)
+				{
+					*b = {};
+				}
+			}
+		}
+	}
+	else if (levelEditingMode)
 	{
 		if (!mouseOverUI)
 		{
@@ -234,7 +266,21 @@ bool updateGame()
 		WHITE
 	);
 
-	if (levelEditingMode)
+	// show the block that would be placed, ghosted over the cell under the cursor
+	if (levelEditingMode && gameData.editingSubMode == placementSubMode
+		&& gameData.creativeSelectedBlock != Block::air)
+	{
+		DrawTexturePro(
+			assetManager.textures,
+			getTextureAtlas(gameData.creativeSelectedBlock, 0, 32, 32), //source
+			{ (float)blockX, (float)blockY, 1, 1 }, //dest
+			{ 0, 0 },// origin (top-left corner)
+			0.0f, // rotation
+			{ 255, 255, 255, 140 } // tint, faded so it reads as a preview
+		);
+	}
+
+	if (levelEditingMode && gameData.editingSubMode == copyPasteSubMode)
 	{
 		// the drag corners are unordered, so take the min and max to get the rectangle
 		float minX = fminf(gameData.selectionStart.x, gameData.selectionEnd.x);
@@ -263,23 +309,66 @@ bool updateGame()
 		ImGui::SliderFloat("Camera zoom: ", &gameData.camera.zoom, 30, 100);
 		ImGui::Separator();
 
-		for (int i = 0; i < Block::BLOCKS_COUNT; i++)
-		{
+		ImGui::RadioButton("Copy paste mode", &gameData.editingSubMode, copyPasteSubMode);
+		ImGui::RadioButton("Placement mode", &gameData.editingSubMode, placementSubMode);
 
-			auto atlas = getTextureAtlas(i, 0, 32, 32);
+		if (gameData.editingSubMode == copyPasteSubMode)
+		{
+			ImGui::TextUnformatted("Middle drag selects, right copies, left pastes");
+		}
+		else
+		{
+			ImGui::TextUnformatted("Left places the selected block, right deletes");
+		}
+
+		ImGui::Separator();
+
+		ImTextureID tex = (ImTextureID)(intptr_t)assetManager.textures.id;
+
+		// normalized atlas coordinates, which is what ImGui wants for uvs
+		auto atlasUV = [](int blockType)
+		{
+			auto atlas = getTextureAtlas(blockType, 0, 32, 32);
 			atlas.x /= assetManager.textures.width;
 			atlas.width /= assetManager.textures.width;
 			atlas.y /= assetManager.textures.height;
 			atlas.height /= assetManager.textures.height;
+			return atlas;
+		};
+
+		auto selectedAtlas = atlasUV(gameData.creativeSelectedBlock);
+
+		ImGui::TextUnformatted("Selected block:");
+		ImGui::SameLine();
+		ImGui::Image(tex, { 35,35 },
+			{ selectedAtlas.x, selectedAtlas.y },
+			{ selectedAtlas.x + selectedAtlas.width, selectedAtlas.y + selectedAtlas.height });
+
+		for (int i = 0; i < Block::BLOCKS_COUNT; i++)
+		{
+
+			auto atlas = atlasUV(i);
 
 			ImGui::PushID(i);
 
-			ImTextureID tex = (ImTextureID)(intptr_t)assetManager.textures.id;
+			// tint the button of the block that's currently selected so it stands
+			// out from the rest of the palette
+			bool isSelected = (i == gameData.creativeSelectedBlock);
+			if (isSelected)
+			{
+				ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.25f, 0.55f, 0.95f, 1.f));
+			}
+
 			if (ImGui::ImageButton(tex,
 				{ 35,35 }, { atlas.x, atlas.y },
 				{ atlas.x + atlas.width, atlas.y + atlas.height }))
 			{
 				gameData.creativeSelectedBlock = i;
+			}
+
+			if (isSelected)
+			{
+				ImGui::PopStyleColor();
 			}
 
 			ImGui::PopID();
