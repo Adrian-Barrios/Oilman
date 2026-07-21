@@ -18,6 +18,13 @@
 constexpr float PLAYER_WIDTH = 1.f;
 constexpr float PLAYER_HEIGHT = 2.f;
 
+// all in blocks per second, or blocks per second squared for gravity. y grows
+// downwards, so gravity is positive and a jump starts off negative
+constexpr float PLAYER_MOVE_SPEED = 7.f;
+constexpr float PLAYER_JUMP_SPEED = 12.f;
+constexpr float GRAVITY = 40.f;
+constexpr float MAX_FALL_SPEED = 30.f;
+
 // what the mouse does inside level editing mode
 enum EditingSubMode
 {
@@ -30,7 +37,10 @@ struct GameData
 	GameMap gameMap;
 	Camera2D camera;
 
-	Vector2 playerPosition = {};
+	Vector2 playerPosition = {}; // top left corner of the player's collision box
+	Vector2 playerVelocity = {};
+	bool playerGrounded = false;
+	bool playerFacingRight = true; // kept from the last move, so idling doesn't reset it
 
 	int creativeSelectedBlock = Block::dirt;
 	int editingSubMode = copyPasteSubMode;
@@ -52,16 +62,98 @@ AssetManager assetManager;
 // where the ImGui windows show and the mouse copies and pastes structures
 bool levelEditingMode = false;
 
+// does the player's box at this position overlap anything solid. the sides and the
+// bottom of the map count as solid so you can't walk off the world or fall out of
+// it, but the open sky above the map doesn't
+static bool boxOverlapsSolid(GameMap& map, Vector2 pos)
+{
+	int minX = (int)floorf(pos.x);
+	int maxX = (int)ceilf(pos.x + PLAYER_WIDTH) - 1;
+	int minY = (int)floorf(pos.y);
+	int maxY = (int)ceilf(pos.y + PLAYER_HEIGHT) - 1;
+
+	for (int y = minY; y <= maxY; y++)
+		for (int x = minX; x <= maxX; x++)
+		{
+			if (x < 0 || x >= map.w) { return true; }
+			if (y >= map.h) { return true; }
+			if (y < 0) { continue; }
+
+			if (Block::isSolid(map.getBlocUnsafe(x, y).type)) { return true; }
+		}
+
+	return false;
+}
+
+// moves the player along a single axis and stops flush against the first solid
+// block in the way, returning whether it hit something. the move is split into sub
+// block steps so a fast fall can't tunnel straight through a thin floor
+static bool movePlayerAxis(GameMap& map, Vector2& pos, float amount, bool horizontal)
+{
+	constexpr float MAX_STEP = 0.25f;
+
+	int steps = (int)ceilf(fabsf(amount) / MAX_STEP);
+	if (steps < 1) { steps = 1; }
+
+	float stepAmount = amount / steps;
+
+	for (int i = 0; i < steps; i++)
+	{
+		Vector2 next = pos;
+		if (horizontal) { next.x += stepAmount; }
+		else { next.y += stepAmount; }
+
+		if (boxOverlapsSolid(map, next))
+		{
+			// back out to the face of the block we ran into
+			if (horizontal)
+			{
+				if (stepAmount > 0) { pos.x = floorf(next.x + PLAYER_WIDTH) - PLAYER_WIDTH; }
+				else { pos.x = floorf(next.x) + 1; }
+			}
+			else
+			{
+				if (stepAmount > 0) { pos.y = floorf(next.y + PLAYER_HEIGHT) - PLAYER_HEIGHT; }
+				else { pos.y = floorf(next.y) + 1; }
+			}
+
+			return true;
+		}
+
+		pos = next;
+	}
+
+	return false;
+}
+
+// drops the player onto the first solid block of their spawn column
+static void spawnPlayer(GameMap& map, Vector2& pos)
+{
+	constexpr int SPAWN_X = 20;
+
+	pos = { (float)SPAWN_X, 0 };
+
+	for (int y = 0; y < map.h; y++)
+	{
+		if (Block::isSolid(map.getBlocUnsafe(SPAWN_X, y).type))
+		{
+			pos.y = y - PLAYER_HEIGHT;
+			break;
+		}
+	}
+}
+
 bool initGame()
 {
 	assetManager.loadAll();
 
 	#pragma region mapCreation
 	generateWorld(gameData.gameMap,1234);
+	spawnPlayer(gameData.gameMap, gameData.playerPosition);
 	#pragma endregion
 
 	#pragma region camera
-	gameData.camera.target = { 20, 120 };
+	gameData.camera.target = gameData.playerPosition;
 	gameData.camera.rotation = 0.0f;
 	gameData.camera.zoom = 100.0f;
 	#pragma endregion
@@ -75,6 +167,59 @@ bool updateGame()
 	if (deltaTime > 1.f / 5) { deltaTime = 1 / 5.f; }
 
 	if (IsKeyPressed(KEY_TAB)) { levelEditingMode = !levelEditingMode; }
+
+#pragma region playerPhysics
+	// the player is frozen while editing, so you can build around them and fly the
+	// camera off without dragging them along
+	if (!levelEditingMode)
+	{
+		float moveInput = 0;
+		if (IsKeyDown(KEY_LEFT) || IsKeyDown(KEY_A)) { moveInput -= 1; }
+		if (IsKeyDown(KEY_RIGHT) || IsKeyDown(KEY_D)) { moveInput += 1; }
+
+		gameData.playerVelocity.x = moveInput * PLAYER_MOVE_SPEED;
+
+		if (moveInput != 0) { gameData.playerFacingRight = moveInput > 0; }
+
+		bool jumpPressed = IsKeyPressed(KEY_SPACE)
+			|| IsKeyPressed(KEY_UP) || IsKeyPressed(KEY_W);
+
+		if (jumpPressed && gameData.playerGrounded)
+		{
+			gameData.playerVelocity.y = -PLAYER_JUMP_SPEED;
+			gameData.playerGrounded = false;
+		}
+
+		gameData.playerVelocity.y += GRAVITY * deltaTime;
+		if (gameData.playerVelocity.y > MAX_FALL_SPEED)
+		{
+			gameData.playerVelocity.y = MAX_FALL_SPEED;
+		}
+
+		// one axis at a time, so running into a wall still lets gravity work and
+		// vice versa
+		movePlayerAxis(gameData.gameMap, gameData.playerPosition,
+			gameData.playerVelocity.x * deltaTime, true);
+
+		bool hitVertically = movePlayerAxis(gameData.gameMap, gameData.playerPosition,
+			gameData.playerVelocity.y * deltaTime, false);
+
+		if (hitVertically)
+		{
+			// landed if we were on the way down, hit a ceiling if we were going up
+			gameData.playerGrounded = gameData.playerVelocity.y > 0;
+			gameData.playerVelocity.y = 0;
+		}
+		else
+		{
+			gameData.playerGrounded = false;
+		}
+
+		gameData.camera.target = {
+			gameData.playerPosition.x + PLAYER_WIDTH / 2.f,
+			gameData.playerPosition.y + PLAYER_HEIGHT / 2.f };
+	}
+#pragma endregion
 
 	gameData.camera.offset = { GetScreenWidth() / 2.0f, GetScreenHeight() / 2.0f };
 
@@ -143,17 +288,19 @@ bool updateGame()
 
 #pragma region drawPlayer
 
-	// no physics yet, the player just rides the camera. camera.offset is the middle
-	// of the screen, so camera.target is whatever world point ends up centered,
-	// including after the world edge clamp above
-	gameData.playerPosition = gameData.camera.target;
+	// playerPosition is the top left of the collision box, which is exactly what
+	// the destination rectangle wants
+
+	// a negative source width mirrors the sprite, the sheet has him facing right
+	float playerSourceWidth = (float)assetManager.player.width;
+	if (!gameData.playerFacingRight) { playerSourceWidth = -playerSourceWidth; }
 
 	DrawTexturePro(
 		assetManager.player,
-		{ 0, 0, (float)assetManager.player.width, (float)assetManager.player.height }, //source
+		{ 0, 0, playerSourceWidth, (float)assetManager.player.height }, //source
 		{ gameData.playerPosition.x, gameData.playerPosition.y,
 			PLAYER_WIDTH, PLAYER_HEIGHT }, //dest
-		{ PLAYER_WIDTH / 2.f, PLAYER_HEIGHT / 2.f }, // origin (sprite center)
+		{ 0, 0 }, // origin (top-left corner)
 		0.0f, // rotation
 		WHITE // tint
 	);
@@ -161,13 +308,17 @@ bool updateGame()
 #pragma endregion
 
 #pragma region cameraMovement
+	// only a free camera while editing. while playing it follows the player
 	static float CAMERA_SPEED = 7;
-	if (IsKeyDown(KEY_LEFT)) gameData.camera.target.x -= CAMERA_SPEED * deltaTime;
-	if (IsKeyDown(KEY_RIGHT)) gameData.camera.target.x += CAMERA_SPEED * deltaTime;
-	if (IsKeyDown(KEY_DOWN)) gameData.camera.target.y += CAMERA_SPEED * deltaTime;
-	if (IsKeyDown(KEY_UP)) gameData.camera.target.y -= CAMERA_SPEED * deltaTime;
+	if (levelEditingMode)
+	{
+		if (IsKeyDown(KEY_LEFT)) gameData.camera.target.x -= CAMERA_SPEED * deltaTime;
+		if (IsKeyDown(KEY_RIGHT)) gameData.camera.target.x += CAMERA_SPEED * deltaTime;
+		if (IsKeyDown(KEY_DOWN)) gameData.camera.target.y += CAMERA_SPEED * deltaTime;
+		if (IsKeyDown(KEY_UP)) gameData.camera.target.y -= CAMERA_SPEED * deltaTime;
+	}
 
-#pragma endregion 
+#pragma endregion
 	
 #pragma region addAndDeleteBlocks
 	

@@ -64,6 +64,21 @@ struct Block
 	};
 	std::uint16_t type = 0;
 
+	// blocks the player can't walk through. the decorative overlays are passable,
+	// otherwise a tuft of grass would stop you dead
+	static bool isSolid(std::uint16_t type)
+	{
+		switch (type)
+		{
+			case air:
+			case grass:
+			case sappling:
+				return false;
+			default:
+				return true;
+		}
+	}
+
 	void sanitize()
 	{
 		if (type >= BLOCKS_COUNT)
