@@ -291,6 +291,10 @@ bool initGame()
 	Audio::init();
 	loadSettings();
 
+	// start the looping background track right away so it plays on the home screen
+	// and carries into gameplay. Audio::update(), called every frame, keeps it going
+	Audio::playMusic(Audio::musicDesert);
+
 	assetManager.loadAll();
 
 	#pragma region mapCreation
