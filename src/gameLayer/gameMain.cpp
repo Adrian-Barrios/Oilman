@@ -25,6 +25,20 @@ constexpr float PLAYER_JUMP_SPEED = 12.f;
 constexpr float GRAVITY = 40.f;
 constexpr float MAX_FALL_SPEED = 30.f;
 
+// pumpjacks need a flat stretch this wide to stand on, and never come closer
+// together than the spacing. three players tall
+constexpr int PUMPJACK_MIN_FLAT = 10;
+constexpr int PUMPJACK_SPACING = 30;
+constexpr float PUMPJACK_HEIGHT = PLAYER_HEIGHT * 3.f;
+
+// pumpjack.png is 1024x1536 but the artwork only fills part of it. these are the
+// bounds of the non transparent pixels, so the height above applies to the rig
+// itself rather than to the empty padding around it
+constexpr float PUMPJACK_SRC_X = 173;
+constexpr float PUMPJACK_SRC_Y = 300;
+constexpr float PUMPJACK_SRC_W = 650;
+constexpr float PUMPJACK_SRC_H = 892;
+
 // what the mouse does inside level editing mode
 enum EditingSubMode
 {
@@ -51,6 +65,10 @@ struct GameData
 	Vector2 selectionEnd = {};
 
 	Structure copyStructure;
+
+	// where each pumpjack stands, worked out once after the world is generated.
+	// x is the column, y is the surface it rests on
+	std::vector<Vector2> pumpjackPositions;
 
 	char saveName[100] = {};
 
@@ -143,6 +161,56 @@ static void spawnPlayer(GameMap& map, Vector2& pos)
 	}
 }
 
+// stands a pumpjack on every stretch of ground that runs flat for at least
+// PUMPJACK_MIN_FLAT columns, never placing two closer than PUMPJACK_SPACING apart
+static void placePumpjacks(GameMap& map, std::vector<Vector2>& out)
+{
+	out.clear();
+
+	// surface height of every column up front, -1 for a column with nothing in it
+	std::vector<int> surface(map.w, -1);
+
+	for (int x = 0; x < map.w; x++)
+		for (int y = 0; y < map.h; y++)
+		{
+			if (Block::isSolid(map.getBlocUnsafe(x, y).type))
+			{
+				surface[x] = y;
+				break;
+			}
+		}
+
+	int lastPlacedX = -PUMPJACK_SPACING; // nothing placed yet, don't block the first one
+
+	int runStart = 0;
+	for (int x = 1; x <= map.w; x++)
+	{
+		// a run ends at the map edge, or as soon as the ground steps up or down
+		bool runContinues = (x < map.w) && surface[x] >= 0 && surface[x] == surface[runStart];
+		if (runContinues) { continue; }
+
+		int runEnd = x - 1;
+		int runLength = runEnd - runStart + 1;
+
+		if (surface[runStart] >= 0 && runLength >= PUMPJACK_MIN_FLAT)
+		{
+			// the first one sits far enough in that it has its flat stretch under it,
+			// then keep walking a long run placing more while the spacing allows
+			for (int px = runStart + PUMPJACK_MIN_FLAT / 2;
+				px + PUMPJACK_MIN_FLAT / 2 <= runEnd + 1;
+				px += PUMPJACK_SPACING)
+			{
+				if (px - lastPlacedX < PUMPJACK_SPACING) { continue; }
+
+				out.push_back(Vector2{ (float)px, (float)surface[runStart] });
+				lastPlacedX = px;
+			}
+		}
+
+		runStart = x;
+	}
+}
+
 bool initGame()
 {
 	assetManager.loadAll();
@@ -150,6 +218,7 @@ bool initGame()
 	#pragma region mapCreation
 	generateWorld(gameData.gameMap,1234);
 	spawnPlayer(gameData.gameMap, gameData.playerPosition);
+	placePumpjacks(gameData.gameMap, gameData.pumpjackPositions);
 	#pragma endregion
 
 	#pragma region camera
@@ -283,6 +352,28 @@ bool updateGame()
 
 
 		}
+
+#pragma endregion
+
+#pragma region drawPumpjacks
+
+	// keep the sprite's proportions, the height is what was asked for
+	float pumpjackWidth = PUMPJACK_HEIGHT * (PUMPJACK_SRC_W / PUMPJACK_SRC_H);
+
+	for (auto& p : gameData.pumpjackPositions)
+	{
+		if (p.x + pumpjackWidth < startXView) { continue; }
+		if (p.x - pumpjackWidth > endXView) { continue; }
+
+		DrawTexturePro(
+			assetManager.pumpjack,
+			{ PUMPJACK_SRC_X, PUMPJACK_SRC_Y, PUMPJACK_SRC_W, PUMPJACK_SRC_H }, //source
+			{ p.x + 0.5f, p.y, pumpjackWidth, PUMPJACK_HEIGHT }, //dest
+			{ pumpjackWidth / 2.f, PUMPJACK_HEIGHT }, // origin (bottom center, so it stands on the ground)
+			0.0f, // rotation
+			WHITE // tint
+		);
+	}
 
 #pragma endregion
 
