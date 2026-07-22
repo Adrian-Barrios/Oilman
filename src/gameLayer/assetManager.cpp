@@ -11,4 +11,6 @@ void AssetManager::loadAll()
 	player = LoadTexture(RESOURCES_PATH "player.png");
 
 	pumpjack = LoadTexture(RESOURCES_PATH "structures/pumpjack.png");
+
+	titlecard = LoadTexture(RESOURCES_PATH "screens/titlecard.png");
 }

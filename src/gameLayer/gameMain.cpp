@@ -80,6 +80,79 @@ AssetManager assetManager;
 // where the ImGui windows show and the mouse copies and pastes structures
 bool levelEditingMode = false;
 
+// the game opens on the main menu and only starts once Play is pressed
+bool inMainMenu = true;
+
+// a flat rectangular button with a label, drawn centered on (centerX, centerY).
+// returns true on the frame it's clicked. lightens on hover so it reads as live
+static bool menuButton(const char* label, float centerX, float centerY,
+	float width, float height)
+{
+	Rectangle rect = { centerX - width / 2.f, centerY - height / 2.f, width, height };
+
+	bool hovered = CheckCollisionPointRec(GetMousePosition(), rect);
+	bool clicked = hovered && IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
+
+	Color fill = hovered ? Color{ 70, 70, 70, 255 } : Color{ 40, 40, 40, 255 };
+	DrawRectangleRec(rect, fill);
+	DrawRectangleLinesEx(rect, 2, Color{ 20, 20, 20, 255 });
+
+	int fontSize = 28;
+	int textWidth = MeasureText(label, fontSize);
+	DrawText(label, (int)(centerX - textWidth / 2.f),
+		(int)(centerY - fontSize / 2.f), fontSize, RAYWHITE);
+
+	return clicked;
+}
+
+// draws the main menu: white background, the title card centered and raised up,
+// with Play and Exit below it. returns false only when Exit is pressed, which the
+// caller turns into a request to close the game
+static bool updateMainMenu()
+{
+	float screenW = (float)GetScreenWidth();
+	float screenH = (float)GetScreenHeight();
+
+	ClearBackground(WHITE);
+
+	// scale the title card to a share of the screen width, keeping its aspect ratio,
+	// and sit it in the upper part of the screen so the buttons have room below
+	float titleWidth = screenW * 0.5f;
+	float aspect = (float)assetManager.titlecard.height / assetManager.titlecard.width;
+	float titleHeight = titleWidth * aspect;
+
+	float titleCenterY = screenH * 0.32f;
+
+	DrawTexturePro(
+		assetManager.titlecard,
+		{ 0, 0, (float)assetManager.titlecard.width, (float)assetManager.titlecard.height },
+		{ screenW / 2.f, titleCenterY, titleWidth, titleHeight },
+		{ titleWidth / 2.f, titleHeight / 2.f }, // origin at its center, so it centers on the point
+		0.0f,
+		WHITE
+	);
+
+	float buttonWidth = 220;
+	float buttonHeight = 60;
+	float buttonSpacing = 20;
+
+	// stack the buttons below the title card
+	float firstButtonY = screenH * 0.62f;
+
+	if (menuButton("Play", screenW / 2.f, firstButtonY, buttonWidth, buttonHeight))
+	{
+		inMainMenu = false;
+	}
+
+	if (menuButton("Exit", screenW / 2.f, firstButtonY + buttonHeight + buttonSpacing,
+		buttonWidth, buttonHeight))
+	{
+		return false;
+	}
+
+	return true;
+}
+
 // does the player's box at this position overlap anything solid. the sides and the
 // bottom of the map count as solid so you can't walk off the world or fall out of
 // it, but the open sky above the map doesn't
@@ -231,6 +304,11 @@ bool initGame()
 }
 bool updateGame()
 {
+	// while on the main menu, nothing else runs; Exit returns false to close the game
+	if (inMainMenu)
+	{
+		return updateMainMenu();
+	}
 
 	float deltaTime = GetFrameTime();
 	if (deltaTime > 1.f / 5) { deltaTime = 1 / 5.f; }
