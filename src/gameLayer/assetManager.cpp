@@ -13,4 +13,8 @@ void AssetManager::loadAll()
 	pumpjack = LoadTexture(RESOURCES_PATH "structures/pumpjack.png");
 
 	titlecard = LoadTexture(RESOURCES_PATH "screens/titlecard.png");
+
+	forestBG = LoadTexture(RESOURCES_PATH "forestBG.png");
+
+	oildrop = LoadTexture(RESOURCES_PATH "oil/Oildrop.png");
 }

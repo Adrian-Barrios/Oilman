@@ -28,11 +28,12 @@ void generateWorld(GameMap& gameMap, int seed)
 	dirtNoiseGenerator->SetFrequency(0.015);
 
 	// Few octaves and a low frequency give broad rolling hills, where the 4
-	// octave fractal was producing jagged ridges.
+	// octave fractal was producing jagged ridges. The lower frequency here widens
+	// each hill so the little surface movement that remains is long and gentle.
 	stoneNoiseGenerator->SetNoiseType(FastNoiseSIMD::NoiseType::SimplexFractal);
 	stoneNoiseGenerator->SetFractalOctaves(2);
 	stoneNoiseGenerator->SetFractalGain(0.35);
-	stoneNoiseGenerator->SetFrequency(0.005);
+	stoneNoiseGenerator->SetFrequency(0.0035);
 
 	// Cellular noise gives discrete blobs rather than a continuous field, so
 	// each cell can become one self contained pocket. Scaling the y axis up
@@ -72,12 +73,16 @@ void generateWorld(GameMap& gameMap, int seed)
 		stoneNoise[i] = (s + 1) / 2;
 	}
 
-	int dirtOffsetStart = 6;
-	int dirtOffsetEnd = 20;
+	// Dirt sits at a near constant thickness so the grass surface tracks the stone
+	// instead of rippling on its own; a 4 block spread barely moves it.
+	int dirtOffsetStart = 8;
+	int dirtOffsetEnd = 12;
 
-	// A 30 block spread instead of the previous 90 keeps the surface gentle.
-	int stoneHeightStart = 110;
-	int stoneHeightEnd = 140;
+	// The surface height is scaled into this spread, so this is the real flatness
+	// knob. An 8 block spread (down from 30) keeps the whole world close to level
+	// with only faint rolling hills.
+	int stoneHeightStart = 120;
+	int stoneHeightEnd = 128;
 
 	// Every cell holds one constant value, so thresholding picks whole pockets
 	// rather than cutting them in half.

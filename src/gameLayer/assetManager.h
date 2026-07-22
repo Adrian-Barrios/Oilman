@@ -9,5 +9,7 @@ struct AssetManager
 	Texture2D player = {};
 	Texture2D pumpjack = {};
 	Texture2D titlecard = {};
+	Texture2D forestBG = {};
+	Texture2D oildrop = {};
 	void loadAll();
 };

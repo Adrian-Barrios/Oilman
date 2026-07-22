@@ -14,6 +14,9 @@
 #include <structure.h>
 #include <audio.h>
 #include <settings.h>
+#include <drawBackground.h>
+#include <cmath>
+#include <vector>
 
 // player.png is 32x64, and blocks are drawn as 1x1 world units from a 32x32
 // atlas, so the player covers one block across and two blocks up
@@ -41,6 +44,19 @@ constexpr float PUMPJACK_SRC_Y = 300;
 constexpr float PUMPJACK_SRC_W = 650;
 constexpr float PUMPJACK_SRC_H = 892;
 
+// oil drops produced by the pumpjacks. all distances are in world units (blocks);
+// at the current camera zoom of 100, one block is 100 screen pixels, so multiply by
+// 100 to think in pixels. every one of these is meant to be tweaked to taste
+constexpr float OIL_SPAWN_INTERVAL = 5.f;   // seconds between each pumpjack dropping one
+constexpr float OIL_DROP_SIZE = 1.5f;       // rendered width and height of a drop
+constexpr float OIL_HOVER_HEIGHT = 0.3f;    // gap kept between the ground and the drop's bottom
+constexpr float OIL_BOB_AMPLITUDE = 0.12f;  // how far it rocks up and down (keep below hover height)
+constexpr float OIL_BOB_SPEED = 3.f;        // how fast it rocks
+constexpr float OIL_ATTRACT_RADIUS = 1.5f;  // the player pulls in any drop closer than this
+constexpr float OIL_ATTRACT_SPEED = 12.f;   // blocks per second a drop flies toward the player
+constexpr float OIL_PICKUP_RADIUS = 0.2f;   // collected once the drop is this close to the player centre
+constexpr int OIL_PICKUP_VALUE = 10;        // millilitres gained per drop
+
 // what the mouse does inside level editing mode
 enum EditingSubMode
 {
@@ -48,10 +64,21 @@ enum EditingSubMode
 	placementSubMode,
 };
 
+// a single blob of oil made by a pumpjack. it bobs in place above the ground until
+// the player comes near, then flies to them and is collected on contact
+struct OilDrop
+{
+	Vector2 basePos = {};      // hover anchor; x is fixed, y is the centre it bobs around
+	Vector2 pos = {};          // current centre of the drop in world space
+	float bobPhase = 0;        // per-drop offset so they don't all rock in unison
+	bool attracting = false;   // latches on once the player has come within range
+};
+
 struct GameData
 {
 	GameMap gameMap;
 	Camera2D camera;
+	DrawBackground background;
 
 	Vector2 playerPosition = {}; // top left corner of the player's collision box
 	Vector2 playerVelocity = {};
@@ -71,6 +98,12 @@ struct GameData
 	// where each pumpjack stands, worked out once after the world is generated.
 	// x is the column, y is the surface it rests on
 	std::vector<Vector2> pumpjackPositions;
+
+	// oil drops currently in the world, plus the shared timer that makes every
+	// pumpjack drop one on the same beat, and the running total collected in mL
+	std::vector<OilDrop> oilDrops;
+	float oilSpawnTimer = 0;
+	int oilCollected = 0;
 
 	char saveName[100] = {};
 
@@ -397,7 +430,79 @@ bool updateGame()
 	}
 #pragma endregion
 
+#pragma region oilDrops
+	// pumpjacks pump: every OIL_SPAWN_INTERVAL each rig drops a fresh blob of oil.
+	// pumpjackPositions is the single source of truth for where rigs stand, so if the
+	// rigs are ever placed differently the oil is produced there automatically
+	gameData.oilSpawnTimer += deltaTime;
+	if (gameData.oilSpawnTimer >= OIL_SPAWN_INTERVAL)
+	{
+		gameData.oilSpawnTimer -= OIL_SPAWN_INTERVAL;
+
+		for (auto& p : gameData.pumpjackPositions)
+		{
+			// p.y is the surface the rig rests on; float the drop so its bottom sits
+			// OIL_HOVER_HEIGHT above that
+			OilDrop drop;
+			drop.basePos = { p.x + 0.5f, p.y - OIL_HOVER_HEIGHT - OIL_DROP_SIZE / 2.f };
+			drop.pos = drop.basePos;
+			drop.bobPhase = (float)GetRandomValue(0, 628) / 100.f; // 0..2pi, so drops bob out of sync
+			gameData.oilDrops.push_back(drop);
+		}
+	}
+
+	// the player's collision box is 1x2 with its top-left at playerPosition
+	Vector2 playerCenter = {
+		gameData.playerPosition.x + PLAYER_WIDTH / 2.f,
+		gameData.playerPosition.y + PLAYER_HEIGHT / 2.f };
+
+	float oilTime = (float)GetTime();
+
+	for (size_t i = 0; i < gameData.oilDrops.size(); )
+	{
+		OilDrop& drop = gameData.oilDrops[i];
+
+		float distance = Vector2Distance(drop.pos, playerCenter);
+
+		// once a drop has been pulled in it keeps chasing, even if the player backs off
+		if (distance < OIL_ATTRACT_RADIUS) { drop.attracting = true; }
+
+		if (drop.attracting)
+		{
+			// collected once it reaches the player centre; the counter ticks up
+			if (distance <= OIL_PICKUP_RADIUS)
+			{
+				gameData.oilCollected += OIL_PICKUP_VALUE;
+				gameData.oilDrops.erase(gameData.oilDrops.begin() + i);
+				continue; // this slot now holds the next drop, so don't advance i
+			}
+
+			// fly straight at the player at the tunable attract speed, clamped so a
+			// single step can never overshoot the centre
+			Vector2 dir = Vector2Normalize(Vector2Subtract(playerCenter, drop.pos));
+			float step = OIL_ATTRACT_SPEED * deltaTime;
+			if (step > distance) { step = distance; }
+			drop.pos = Vector2Add(drop.pos, Vector2Scale(dir, step));
+		}
+		else
+		{
+			// gently rock up and down around the hover anchor
+			drop.pos.x = drop.basePos.x;
+			drop.pos.y = drop.basePos.y
+				+ sinf(oilTime * OIL_BOB_SPEED + drop.bobPhase) * OIL_BOB_AMPLITUDE;
+		}
+
+		i++;
+	}
+#pragma endregion
+
 	ClearBackground({ 75,75,150,255 });
+
+	// parallax forest background, drawn in screen space before the world so it sits
+	// behind everything. the camera is already clamped to the world bounds above
+	gameData.background.setBackground(DrawBackground::forest);
+	gameData.background.draw(deltaTime, assetManager, gameData.camera,
+		{ (float)gameData.gameMap.w, (float)gameData.gameMap.h });
 
 	BeginMode2D(gameData.camera);
 
@@ -460,6 +565,22 @@ bool updateGame()
 			{ PUMPJACK_SRC_X, PUMPJACK_SRC_Y, PUMPJACK_SRC_W, PUMPJACK_SRC_H }, //source
 			{ p.x + 0.5f, p.y, pumpjackWidth, PUMPJACK_HEIGHT }, //dest
 			{ pumpjackWidth / 2.f, PUMPJACK_HEIGHT }, // origin (bottom center, so it stands on the ground)
+			0.0f, // rotation
+			WHITE // tint
+		);
+	}
+
+#pragma endregion
+
+#pragma region drawOilDrops
+
+	for (auto& drop : gameData.oilDrops)
+	{
+		DrawTexturePro(
+			assetManager.oildrop,
+			{ 0, 0, (float)assetManager.oildrop.width, (float)assetManager.oildrop.height }, //source
+			{ drop.pos.x, drop.pos.y, OIL_DROP_SIZE, OIL_DROP_SIZE }, //dest
+			{ OIL_DROP_SIZE / 2.f, OIL_DROP_SIZE / 2.f }, // origin at centre, so pos is the drop's centre
 			0.0f, // rotation
 			WHITE // tint
 		);
@@ -725,6 +846,36 @@ bool updateGame()
 
 	DrawText(levelEditingMode ? "EDITING (tab)" : "PLAYING (tab)",
 		10, 34, 20, RAYWHITE);
+
+#pragma region oilCounter
+	// top-right readout: the oildrop logo followed by the running total in millilitres
+	{
+		const float iconSize = 40;
+		const float gap = 8;      // between the logo and the text
+		const float pad = 10;     // from the screen edges
+		const int fontSize = 28;
+
+		const char* amount = TextFormat("%d mL", gameData.oilCollected);
+		int textW = MeasureText(amount, fontSize);
+
+		float blockW = iconSize + gap + textW;
+		float x = GetScreenWidth() - blockW - pad;
+		float y = pad;
+
+		DrawTexturePro(
+			assetManager.oildrop,
+			{ 0, 0, (float)assetManager.oildrop.width, (float)assetManager.oildrop.height },
+			{ x, y, iconSize, iconSize },
+			{ 0, 0 },
+			0.0f,
+			WHITE
+		);
+
+		// centre the text vertically against the logo
+		DrawText(amount, (int)(x + iconSize + gap),
+			(int)(y + (iconSize - fontSize) / 2.f), fontSize, RAYWHITE);
+	}
+#pragma endregion
 
 	DrawFPS(10, 10);
 	return true;
