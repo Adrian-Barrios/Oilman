@@ -12,6 +12,8 @@
 #include <saveMap.h>
 #include <string>
 #include <structure.h>
+#include <audio.h>
+#include <settings.h>
 
 // player.png is 32x64, and blocks are drawn as 1x1 world units from a 32x32
 // atlas, so the player covers one block across and two blocks up
@@ -286,6 +288,9 @@ static void placePumpjacks(GameMap& map, std::vector<Vector2>& out)
 
 bool initGame()
 {
+	Audio::init();
+	loadSettings();
+
 	assetManager.loadAll();
 
 	#pragma region mapCreation
@@ -304,6 +309,9 @@ bool initGame()
 }
 bool updateGame()
 {
+	Audio::update();
+	updateSettings();
+
 	// while on the main menu, nothing else runs; Exit returns false to close the game
 	if (inMainMenu)
 	{
@@ -509,18 +517,20 @@ bool updateGame()
 			if (IsMouseButtonDown(MOUSE_BUTTON_LEFT))
 			{
 				auto b = gameData.gameMap.getBlockSafe(blockX, blockY);
-				if (b)
+				if (b && b->type != gameData.creativeSelectedBlock)
 				{
 					b->type = gameData.creativeSelectedBlock;
+					Audio::playSound(Audio::placeBlock);
 				}
 			}
 
 			if (IsMouseButtonDown(MOUSE_BUTTON_RIGHT))
 			{
 				auto b = gameData.gameMap.getBlockSafe(blockX, blockY);
-				if (b)
+				if (b && b->type != Block::air)
 				{
 					*b = {};
+					Audio::playSound(Audio::breakBlock);
 				}
 			}
 		}
@@ -560,18 +570,24 @@ bool updateGame()
 		if (IsMouseButtonDown(MOUSE_BUTTON_LEFT))
 		{
 			auto b = gameData.gameMap.getBlockSafe(blockX, blockY);
-			if (b)
+			// only when there's actually a block to break, so dragging over empty
+			// space or an already broken cell doesn't retrigger the sound
+			if (b && b->type != Block::air)
 			{
 				*b = {};
+				Audio::playSound(Audio::breakBlock);
 			}
 		}
 
 		if (IsMouseButtonDown(MOUSE_BUTTON_RIGHT))
 		{
 			auto b = gameData.gameMap.getBlockSafe(blockX, blockY);
-			if (b)
+			// only when the cell actually changes, so holding over a placed block
+			// doesn't retrigger the sound every frame
+			if (b && b->type != gameData.creativeSelectedBlock)
 			{
 				b->type = gameData.creativeSelectedBlock;
+				Audio::playSound(Audio::placeBlock);
 			}
 		}
 	}

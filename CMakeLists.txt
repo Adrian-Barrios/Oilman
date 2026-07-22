@@ -22,6 +22,7 @@ add_subdirectory(thirdparty/raylib-5.0)
 add_subdirectory(thirdparty/imgui-docking)
 add_subdirectory(thirdparty/rlimgui)
 add_subdirectory(thirdparty/FastNoiseSIMD)
+add_subdirectory(thirdparty/json-3.12.0)
 # MY_SOURCES is defined to be a list of all the source files for my game 
 # DON'T ADD THE SOURCES BY HAND, they are already added with this macro
 file(GLOB_RECURSE MY_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
@@ -46,7 +47,7 @@ else()
 
 endif()
 
-target_sources("${CMAKE_PROJECT_NAME}" PRIVATE ${MY_SOURCES}  "src/gameLayer/gameMain.cpp" "src/gameLayer/gameMain.h" "src/gameLayer/assetManager.cpp" "src/gameLayer/assetManager.h" "src/gameLayer/blocks.h" "src/gameLayer/gameMap.cpp" "src/gameLayer/gameMap.h" "src/gameLayer/helpers.h" "src/gameLayer/helpers.cpp" "src/platform/randomStuff.h" "src/gameLayer/randomStuff.cpp" "src/gameLayer/worldGenerator.cpp" "src/gameLayer/worldGenerator.h" "src/gameLayer/saveMap.cpp" "src/gameLayer/saveMap.h" "src/gameLayer/structure.h" "src/gameLayer/structure.cpp")
+target_sources("${CMAKE_PROJECT_NAME}" PRIVATE ${MY_SOURCES}  "src/gameLayer/gameMain.cpp" "src/gameLayer/gameMain.h" "src/gameLayer/assetManager.cpp" "src/gameLayer/assetManager.h" "src/gameLayer/blocks.h" "src/gameLayer/gameMap.cpp" "src/gameLayer/gameMap.h" "src/gameLayer/helpers.h" "src/gameLayer/helpers.cpp" "src/platform/randomStuff.h" "src/gameLayer/randomStuff.cpp" "src/gameLayer/worldGenerator.cpp" "src/gameLayer/worldGenerator.h" "src/gameLayer/saveMap.cpp" "src/gameLayer/saveMap.h" "src/gameLayer/structure.h" "src/gameLayer/structure.cpp" "src/gameLayer/audio.h" "src/gameLayer/audio.cpp" "src/gameLayer/settings.h" "src/gameLayer/settings.cpp")
 
 
 if(MSVC) # If using the VS compiler...
@@ -76,7 +77,7 @@ endif()
 target_include_directories("${CMAKE_PROJECT_NAME}" PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src/platform")
 target_include_directories("${CMAKE_PROJECT_NAME}" PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src/gameLayer")
 
-target_link_libraries("${CMAKE_PROJECT_NAME}" PRIVATE raylib_static imgui rlimgui fastNoiseSIMD)
+target_link_libraries("${CMAKE_PROJECT_NAME}" PRIVATE raylib_static imgui rlimgui fastNoiseSIMD nlohmann_json)
 
 
 
